@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ディール計算</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --baize:#E4ECE7;      /* 卓の地 */
+  --rail:#FFFFFF;       /* カード面 */
+  --ink:#16221E;        /* 文字 */
+  --muted:#5D6B66;
+  --line:#C9D6CF;
+  --red:#C2362E;        /* 軽め / 上位 */
+  --blue:#2443A3;       /* 標準 */
+  --brass:#A87A1F;      /* 強め */
+  --display:"Dela Gothic One",sans-serif;
+  --body:"Zen Kaku Gothic New",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--baize);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6;
+  background-image:radial-gradient(rgba(22,34,30,.05) 1px,transparent 1px);background-size:6px 6px}
+.wrap{max-width:980px;margin:0 auto;padding:28px 18px 64px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(30px,6vw,44px);line-height:1.05;margin:0;letter-spacing:.02em}
+h1 small{display:block;font-family:var(--body);font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.04em;margin-top:8px}
+.tabs{display:flex;background:var(--ink);border-radius:999px;padding:4px}
+.tab{appearance:none;border:0;background:transparent;color:#C8D3CE;font:700 14px var(--body);padding:9px 18px;border-radius:999px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--rail);color:var(--ink)}
+.tab:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.panel{display:none}.panel.on{display:block}
+.card{background:var(--rail);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 14px;font-weight:700}
+.inputs{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:.04em}
+input[type=text],input[type=number],textarea{width:100%;font:600 22px var(--mono);color:var(--ink);background:var(--baize);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+textarea{font-size:18px;resize:vertical;min-height:56px}
+.stepper{display:flex;gap:6px}
+.stepper input{text-align:center}
+.stepper button{flex:0 0 46px;border:1px solid var(--line);background:var(--baize);border-radius:10px;font:700 20px var(--body);cursor:pointer;color:var(--ink)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.err{color:var(--red);font-weight:700;font-size:13px;margin-top:8px;min-height:1em}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;font:700 13px var(--body);padding:9px 14px;border-radius:999px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.small{padding:5px 11px;font-size:12px}
+details{margin-top:14px}
+summary{cursor:pointer;font-weight:700;font-size:13px}
+.custom{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px;align-items:end}
+
+/* 結果テーブル */
+.tbl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl thead th{font-size:12px;color:var(--muted);font-weight:700}
+.tbl td{font-family:var(--mono);font-weight:600;font-size:16px}
+.tbl td:first-child{font-family:var(--body);font-weight:700;font-size:14px}
+.tbl tfoot td{border-bottom:0;border-top:2px solid var(--ink);font-size:17px}
+.d{display:block;font-size:11px;font-weight:500;color:var(--muted)}
+.d.up{color:var(--blue)}.d.down{color:var(--red)}
+.plan-head{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.scroll{overflow-x:auto}
+
+/* チップスタック */
+.stacks{display:grid;gap:14px;margin-top:4px}
+.stackrow{display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:end}
+.stackrow .lbl{font-size:12px;font-weight:700;color:var(--muted);padding-bottom:4px}
+.towers{display:flex;align-items:flex-end;gap:6px;height:120px;border-bottom:2px solid var(--ink)}
+.tower{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.tower .v{font:600 11px var(--mono);color:var(--ink);margin-bottom:3px}
+.chip{width:100%;max-width:54px;border-radius:7px 7px 2px 2px;
+  background:repeating-linear-gradient(180deg,var(--c) 0 7px,rgba(255,255,255,.55) 7px 8px,var(--c) 8px 10px,rgba(0,0,0,.18) 10px 11px);
+  transition:height .45s cubic-bezier(.2,.8,.2,1)}
+.tower .p{font-size:10px;color:var(--muted);margin-top:3px}
+
+.ratios{display:grid;gap:8px;margin-top:6px}
+.ratio{display:grid;grid-template-columns:70px 1fr;gap:10px;font-size:13px;align-items:baseline}
+.ratio b{font-weight:700}
+.ratio .m{font-family:var(--mono);font-weight:600;font-size:14px;word-break:break-word}
+.ratio .t{display:block;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.legend{font-size:12px;color:var(--muted);margin-top:10px}
+
+/* ジャンプ */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.kpi{background:var(--baize);border-radius:12px;padding:12px}
+.kpi .k{font-size:11px;color:var(--muted);font-weight:700}
+.kpi .n{font:600 22px var(--mono);margin-top:2px}
+.jump-bar{display:inline-block;height:8px;border-radius:4px;background:var(--red);vertical-align:middle;margin-left:8px}
+.verdict{font-size:14px;padding:12px 14px;border-left:4px solid var(--brass);background:var(--baize);border-radius:0 10px 10px 0;margin-top:14px}
+.saved{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.saved .pill{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--baize);border-radius:999px;padding:4px 6px 4px 12px;font-size:12px;cursor:pointer}
+.saved .pill span.x{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:14px;padding:0 4px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:640px){
+  .inputs{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .tbl td{font-size:14px}.tbl th,.tbl td{padding:8px 5px}
+}
+@media (prefers-reduced-motion:reduce){.chip,.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ディール計算<small>総額を守る・5の倍数・倍率は下位→上位</small></h1>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-tab="deal">ディール</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="jump">プライズジャンプ</button>
+    </div>
+  </header>
+
+  <!-- ディール -->
+  <section class="panel on" id="deal">
+    <div class="card">
+      <div class="inputs">
+        <div>
+          <label for="total">総額</label>
+          <input id="total" type="text" inputmode="numeric" value="1030">
+          <div class="hint" id="origNote">元の賞金を入れると増減も出ます（プライズジャンプのタブから送れます）</div>
+        </div>
+        <div>
+          <label for="players">人数</label>
+          <div class="stepper">
+            <button type="button" id="minus" aria-label="1人減らす">−</button>
+            <input id="players" type="number" min="2" max="10" value="6">
+            <button type="button" id="plus" aria-label="1人増やす">＋</button>
+          </div>
+        </div>
+      </div>
+      <div class="err" id="dealErr"></div>
+      <details id="customBox">
+        <summary>倍率を自分で指定する</summary>
+        <div class="custom">
+          <div>
+            <label for="customRatio">倍率（下位→上位、カンマ区切り）</label>
+            <input id="customRatio" type="text" placeholder="1, 1.2, 1.5, 1.9, 2.5, 3.5">
+          </div>
+          <button class="btn ghost" id="clearCustom" type="button">消す</button>
+        </div>
+        <div class="hint">入れると「指定」案が追加されます。個数は人数と同じにしてください。</div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h2 style="margin:0">賞金（1位→最下位）</h2>
+        <button class="btn small ghost" id="copyBtn" type="button">結果をコピー</button>
+      </div>
+      <div class="scroll"><table class="tbl" id="dealTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2>倍率（下位→上位）</h2>
+      <div class="ratios" id="ratioList"></div>
+      <div class="legend">上段：実際の倍率　下段：目標の倍率（最下位を1とした値）</div>
+    </div>
+
+    <div class="card">
+      <h2>形の比較</h2>
+      <div class="stacks" id="stacks"></div>
+    </div>
+  </section>
+
+  <!-- プライズジャンプ -->
+  <section class="panel" id="jump">
+    <div class="card">
+      <label for="prizes">賞金（1位→最下位、カンマかスペース区切り）</label>
+      <textarea id="prizes" rows="2">390, 240, 160, 110, 75, 55</textarea>
+      <div class="err" id="jumpErr"></div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="toDeal" type="button">この賞金でディール計算</button>
+        <button class="btn ghost" id="savePreset" type="button">プリセットに保存</button>
+      </div>
+      <div class="saved" id="savedList"></div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <h2>順位ごとのジャンプ</h2>
+      <div class="scroll"><table class="tbl" id="jumpTable"></table></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+
+    <div class="card">
+      <h2>倍率（下位→上位）</h2>
+      <div class="ratios" id="jumpRatio"></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const PRESET6 = {
+  "軽め":[1,1.3,1.8,2.5,3.5,5.0],
+  "標準":[1,1.2,1.5,1.9,2.5,3.5],
+  "強め":[1,1.15,1.35,1.6,1.9,2.3]
+};
+const TOP = {"軽め":5.0,"標準":3.5,"強め":2.3};
+const COLOR = {"軽め":"var(--red)","標準":"var(--blue)","強め":"var(--brass)","指定":"var(--ink)","元":"#8A9A93"};
+let original = null; // 元の賞金（1位→最下位）
+
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString("ja-JP");
+const r2 = x => (Math.round(x*100)/100).toFixed(2);
+const parseNums = s => s.replace(/[，、\s]+/g,",").split(",").map(x=>x.trim()).filter(Boolean).map(x=>Number(x.replace(/[^\d.]/g,"")));
+
+function preset(name,n){
+  if(n===6) return PRESET6[name];
+  if(n===1) return [1];
+  return Array.from({length:n},(_,i)=>Math.round(Math.pow(TOP[name],i/(n-1))*100)/100);
+}
+// ratio: 下位→上位。戻り値も下位→上位。5の倍数で合計ぴったり、丸め誤差最小。同点は下位に回す。
+function solve(total,ratio){
+  const s = ratio.reduce((a,b)=>a+b,0);
+  const ideal = ratio.map(r=>total*r/s);
+  const res = ideal.map(x=>Math.floor(x/5)*5);
+  let rem = (total - res.reduce((a,b)=>a+b,0))/5;
+  const order = ideal.map((x,i)=>({i,f:x-res[i]})).sort((a,b)=> (b.f-a.f) || (a.i-b.i));
+  for(let k=0;k<rem;k++) res[order[k].i]+=5;
+  return res;
+}
+const ratioStr = arr => arr.map((x,i)=> i===0 ? "1" : r2(x/arr[0])).join(" : ");
+
+function getTotal(){
+  const v = Number(String($("total").value).replace(/[^\d]/g,""));
+  return v;
+}
+function renderDeal(){
+  const total = getTotal();
+  let n = Math.max(2,Math.min(10,parseInt($("players").value)||6));
+  const err = $("dealErr");
+  err.textContent = "";
+  if(!total){ err.textContent = "総額を入れてください"; return; }
+  if(total%5){ err.textContent = `総額 ${fmt(total)} は5の倍数ではないため、全員5の倍数にすると合計が合いません。総額を見直してください。`; return; }
+  if(total < n*5){ err.textContent = "総額が少なすぎます"; return; }
+  if(original && original.length!==n) original = null;
+  $("origNote").textContent = original ? `元の賞金：${original.map(fmt).join(" / ")}（増減を表示中）` : "元の賞金を入れると増減も出ます（プライズジャンプのタブから送れます）";
+  if(original && original.reduce((a,b)=>a+b,0)!==total){ original=null; $("origNote").textContent="総額を変えたので元の賞金との比較を外しました"; }
+
+  const plans = [];
+  for(const k of ["軽め","標準","強め"]){ const r=preset(k,n); plans.push({name:k,ratio:r,res:solve(total,r)}); }
+  const cs = $("customRatio").value.trim();
+  if(cs){
+    const r = parseNums(cs);
+    if(r.length!==n || r.some(x=>!(x>0))) err.textContent = `指定の倍率は${n}個の正の数で入れてください（いま${r.length}個）`;
+    else plans.push({name:"指定",ratio:r,res:solve(total,r)});
+  }
+  window._plans = {total,n,plans};
+
+  // テーブル（1位→最下位）
+  let h = "<thead><tr><th>順位</th>";
+  if(original) h += `<th><span class="plan-head"><span class="dot" style="background:${COLOR["元"]}"></span>元</span></th>`;
+  for(const p of plans) h += `<th><span class="plan-head"><span class="dot" style="background:${COLOR[p.name]}"></span>${p.name}</span></th>`;
+  h += "</tr></thead><tbody>";
+  for(let rank=1;rank<=n;rank++){
+    const idx = n-rank;
+    h += `<tr><td>${rank}位</td>`;
+    if(original) h += `<td>${fmt(original[rank-1])}</td>`;
+    for(const p of plans){
+      const v = p.res[idx];
+      let d = "";
+      if(original){ const diff=v-original[rank-1]; d = `<span class="d ${diff>0?'up':diff<0?'down':''}">${diff>0?'+':diff<0?'−':'±'}${fmt(Math.abs(diff))}</span>`; }
+      h += `<td>${fmt(v)}${d}</td>`;
+    }
+    h += "</tr>";
+  }
+  h += `</tbody><tfoot><tr><td>合計</td>`;
+  if(original) h += `<td>${fmt(original.reduce((a,b)=>a+b,0))}</td>`;
+  for(const p of plans) h += `<td>${fmt(p.res.reduce((a,b)=>a+b,0))}</td>`;
+  h += "</tr></tfoot>";
+  $("dealTable").innerHTML = h;
+
+  // 倍率
+  let rl = "";
+  if(original) rl += `<div class="ratio"><b style="color:${COLOR["元"]}">元</b><span class="m">${ratioStr([...original].reverse())}</span></div>`;
+  for(const p of plans) rl += `<div class="ratio"><b style="color:${COLOR[p.name]}">${p.name}</b><span class="m">${ratioStr(p.res)}<span class="t">目標 ${p.ratio.map(x=>+x.toFixed(2)).join(" : ")}</span></span></div>`;
+  $("ratioList").innerHTML = rl;
+
+  // スタック
+  const rows = [];
+  if(original) rows.push({name:"元",vals:original});
+  for(const p of plans) rows.push({name:p.name,vals:[...p.res].reverse()});
+  const max = Math.max(...rows.flatMap(r=>r.vals));
+  $("stacks").innerHTML = rows.map(r=>`<div class="stackrow"><div class="lbl" style="color:${COLOR[r.name]}">${r.name}</div><div class="towers">${
+    r.vals.map((v,i)=>`<div class="tower"><span class="v">${fmt(v)}</span><div class="chip" style="--c:${COLOR[r.name]};height:${Math.max(4,v/max*88)}px"></div><span class="p">${i+1}位</span></div>`).join("")
+  }</div></div>`).join("");
+}
+
+function copyResult(){
+  const st = window._plans; if(!st) return;
+  let t = `総額 ${fmt(st.total)}\n`;
+  for(const p of st.plans){
+    t += `\n【${p.name}】\n`;
+    [...p.res].reverse().forEach((v,i)=>{ t += `${i+1}位 ${fmt(v)}\n`; });
+    t += `合計 ${fmt(p.res.reduce((a,b)=>a+b,0))}\n倍率（下位→上位） ${ratioStr(p.res)}\n`;
+  }
+  navigator.clipboard.writeText(t).then(()=>toast("コピーしました"),()=>toast("コピーできませんでした"));
+}
+
+function renderJump(){
+  const err = $("jumpErr"); err.textContent="";
+  const p = parseNums($("prizes").value);
+  if(p.length<2 || p.some(x=>!(x>0))){ err.textContent="賞金を2つ以上、数字で入れてください"; ["kpis","jumpTable","verdict","jumpRatio"].forEach(id=>$(id).innerHTML=""); return null; }
+  const desc = [...p].sort((a,b)=>b-a);
+  if(desc.join()!==p.join()) err.textContent="1位から順に大きい額で並んでいないので、並べ替えて計算しています";
+  const n = desc.length, total = desc.reduce((a,b)=>a+b,0);
+  const asc = [...desc].reverse();
+  $("kpis").innerHTML = [
+    ["総額",fmt(total)],["人数",n+"人"],["1位 ÷ 最下位","×"+r2(desc[0]/desc[n-1])],["1位の取り分",(desc[0]/total*100).toFixed(1)+"%"]
+  ].map(([k,v])=>`<div class="kpi"><div class="k">${k}</div><div class="n">${v}</div></div>`).join("");
+
+  const jumps = [];
+  for(let rank=n-1;rank>=1;rank--){ jumps.push({from:rank+1,to:rank,amt:desc[rank-1]-desc[rank],mul:desc[rank-1]/desc[rank]}); }
+  const maxMul = Math.max(...jumps.map(j=>j.mul));
+  let h = `<thead><tr><th>順位の上がり方</th><th>増える額</th><th>倍率</th></tr></thead><tbody>`;
+  for(const j of [...jumps].reverse()){
+    const w = Math.round((j.mul-1)/(maxMul-1||1)*80)+4;
+    h += `<tr><td>${j.from}位 → ${j.to}位</td><td>+${fmt(j.amt)}</td><td>×${r2(j.mul)}<span class="jump-bar" style="width:${w}px;opacity:${j.mul===maxMul?1:.35}"></span></td></tr>`;
+  }
+  h += `</tbody><tfoot><tr><td>合計</td><td colspan="2">${fmt(total)}</td></tr></tfoot>`;
+  $("jumpTable").innerHTML = h;
+
+  const big = jumps.reduce((a,b)=>b.mul>a.mul?b:a);
+  const tb = desc[0]/desc[n-1];
+  const level = tb>=6 ? "かなりトップヘビー" : tb>=4 ? "ややトップヘビー" : tb>=2.5 ? "標準的" : "フラット寄り";
+  $("verdict").innerHTML = `1位は最下位の <b>${r2(tb)}倍</b>で、<b>${level}</b>な構成です。一番大きいジャンプは <b>${big.from}位 → ${big.to}位（×${r2(big.mul)}、+${fmt(big.amt)}）</b>。${total%5?"<br>総額が5の倍数ではないため、ディール計算には総額の調整が必要です。":""}`;
+  $("jumpRatio").innerHTML = `<div class="ratio"><b>倍率</b><span class="m">${ratioStr(asc)}</span></div>`;
+  return desc;
+}
+
+// プリセット保存
+const KEY="dealPresets";
+const loadP = ()=>{ try{return JSON.parse(localStorage.getItem(KEY))||[]}catch(e){return []} };
+const saveP = a=>{ try{localStorage.setItem(KEY,JSON.stringify(a))}catch(e){} };
+function renderSaved(){
+  const a = loadP();
+  $("savedList").innerHTML = a.map((x,i)=>`<span class="pill" data-i="${i}" role="button" tabindex="0">${x.name}<span class="x" data-del="${i}" aria-label="削除">×</span></span>`).join("");
+}
+$("savedList").addEventListener("click",e=>{
+  const del = e.target.dataset.del;
+  const a = loadP();
+  if(del!==undefined){ a.splice(+del,1); saveP(a); renderSaved(); return; }
+  const pill = e.target.closest(".pill"); if(!pill) return;
+  $("prizes").value = a[+pill.dataset.i].prizes.join(", "); renderJump();
+});
+$("savePreset").addEventListener("click",()=>{
+  const d = renderJump(); if(!d) return;
+  const name = prompt("プリセットの名前", `${d.length}人・総額${d.reduce((a,b)=>a+b,0)}`);
+  if(!name) return;
+  const a = loadP(); a.push({name,prizes:d}); saveP(a); renderSaved(); toast("保存しました");
+});
+$("toDeal").addEventListener("click",()=>{
+  const d = renderJump(); if(!d) return;
+  const total = d.reduce((a,b)=>a+b,0);
+  $("total").value = total; $("players").value = d.length;
+  original = total%5 ? null : d;
+  switchTab("deal"); renderDeal();
+});
+
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1600); }
+function switchTab(id){
+  document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===id));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.id===id));
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+$("total").addEventListener("input",()=>{ renderDeal(); });
+$("players").addEventListener("input",renderDeal);
+$("minus").addEventListener("click",()=>{ $("players").value=Math.max(2,(+$("players").value||6)-1); renderDeal(); });
+$("plus").addEventListener("click",()=>{ $("players").value=Math.min(10,(+$("players").value||6)+1); renderDeal(); });
+$("customRatio").addEventListener("input",renderDeal);
+$("clearCustom").addEventListener("click",()=>{ $("customRatio").value=""; renderDeal(); });
+$("copyBtn").addEventListener("click",copyResult);
+$("prizes").addEventListener("input",renderJump);
+
+// 初期表示：例の賞金をディール側にも元として入れる
+original = [390,240,160,110,75,55];
+renderDeal(); renderJump(); renderSaved();
+</script>
+</body>
+</html>
